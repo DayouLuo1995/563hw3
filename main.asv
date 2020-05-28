@@ -1,0 +1,136 @@
+a =     fea(1,:);
+a = reshape(a, 32,32);
+pcolor(a'), shading interp, pause(0.01)
+[U, Sigma, V]= svd(fea', 'econ');
+plot(1:1024, diag(Sigma)./ sum(Sigma, "all"), 'ro');
+title("Singular values");
+%200 mode is totally enough
+figure(2)
+for i = 1:9
+    subplot(3,3,i)
+    pcolor(flipud(reshape(U(:,i), 32, 32))); shading interp
+    colormap(gray)
+       axis off;
+       t = ['Column ', num2str(i), 'of U'];
+       title(t)
+end
+figure(2)
+%%%Take 10 singular value.
+S = diag(Sigma);
+sum(S(1:30))/ sum(S)
+temp = zeros(1,1024)
+for i = 1:1024
+    temp(i) = sum(S(1:i))/ sum(S);
+end
+plot(temp)
+
+A=[];
+for i = 0:0.1:1
+    B=find(temp >i);
+    A = [A, B(1)];
+end
+%%%Reconstruction
+A = A(2:10);
+temp = 10
+for i = 1:9
+    subplot(3,3,i);
+    r = A(i);%10 is reasonable quality
+    B= U(:, 1:r) * Sigma(1:r, 1:r) * V(1, 1:r)';
+   
+     pcolor(flipud(reshape(B, 32, 32))); shading interp
+      axis off;
+    colormap(gray)
+    t = [num2str(r),' sigularvalues','(', num2str(temp), '%)'];
+    title(t)
+     temp = temp +10;
+end
+
+%%57 singular values gives an identifiable reconstruction
+%%So I tried 2 things, A) I used 10 singular values for identificaiton
+% B) I used 57
+
+
+%Classifcation
+Data = V(:, 1:57);
+Data = Data';
+Traindata = [];
+Trainlabel = [];
+Testlabel = [];
+Testdata = [];
+for i = 1: max(gnd)
+    %%%get 5 picture for each person as train data
+    index = find(gnd==i);
+    l = length(index);
+    l_pick = randsample(1:l, 5);
+    index_test = index(l_pick);
+    index_train = setdiff(index, index_test);
+    Testdata = [Testdata, Data(:,index_test)];
+    Testlabel = [Testlabel, gnd(index_test)'];
+    Traindata = [Traindata, Data(:, index_train)];
+    Trainlabel = [Trainlabel, gnd(index_train)'];
+end
+    
+%Gender 
+gendertrainlabel= [];
+for i = 1:length(Trainlabel)
+    B = intersect(Trainlabel(i), [5, 15,22,27, 28, 32, 34, 37]);
+    gendertrainlabel = [gendertrainlabel, size(B, 2)];
+end
+
+gendertestlabel = [];
+for i = 1: length(Testlabel)
+    B = intersect(Testlabel(i), [5, 15,22,27, 28, 32, 34, 37]);
+    gendertestlabel = [gendertestlabel, size(B,2)];
+end
+
+
+
+% 
+% 
+% 
+% 
+%%Naive Bayes
+Traindata = Traindata';
+Testdata = Testdata';
+% 
+ nb = fitcnb(Traindata, Trainlabel);
+ k = loss(nb, Traindata, Trainlabel);
+ k2 = 1- loss(nb, Testdata, Testlabel)%0.8554
+
+nb = fitcnb(Traindata, gendertrainlabel);
+k2 =1-  loss(nb, Testdata, gendertestlabel)%0.8525
+
+% %%KNN
+ md2 = fitcknn(Traindata, Trainlabel, 'NumNeighbors', 3);
+ k2 = 1- loss(md2, Testdata, Testlabel) %8737
+ md2 = fitcknn(Traindata, Trainlabel, 'NumNeighbors', 5);
+ k3 = 1- loss(md2, Testdata, Testlabel)%8999
+ md2 = fitcknn(Traindata, Trainlabel, 'NumNeighbors', 10);
+ k3 = 1- loss(md2, Testdata, Testlabel)%9133
+md2 = fitcknn(Traindata, gendertrainlabel, 'NumNeighbors', 3);
+k2 = 1- loss(md2, Testdata, gendertestlabel) %9526
+md2 = fitcknn(Traindata, gendertrainlabel, 'NumNeighbors', 5);
+k3 = 1- loss(md2, Testdata, gendertestlabel) %9842
+md2 = fitcknn(Traindata, gendertrainlabel, 'NumNeighbors', 10);
+k3 = 1- loss(md2, Testdata, gendertestlabel) %9710
+%%
+%%%projection
+md3 = classify(Testdata, Traindata, Trainlabel);
+sum((md3 - Testlabel')==0)/ length(md3)%0.8132
+md3 = classify(Testdata, Traindata, gendertrainlabel);
+sum((md3 - gendertestlabel')==0)/ length(md3)%07868
+%%%Support vector machine
+md4 = fitcecoc(Traindata, Trainlabel);
+k4 = 1- loss(md4, Testdata, Testlabel); %06646
+md6 = fitcsvm(Traindata, gendertrainlabel);
+k5 = 1 - loss(md6, Testdata, gendertestlabel)%0.7887
+
+%%%%
+md5 = fitctree(Traindata, Trainlabel);
+k5 = 1 - loss(md5, Testdata, Testlabel);%7794
+md7 = fitctree(Traindata, gendertrainlabel);
+k7 = 1- loss(md7, Testdata, gendertestlabel)%9736
+
+
+%%%%kmeans
+
